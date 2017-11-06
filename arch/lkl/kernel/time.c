@@ -5,7 +5,10 @@
 #include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/irq.h>
+#include <linux/tick.h>
+#include <linux/cpumask.h>
 #include <asm/host_ops.h>
+#include <asm/cpu.h>
 
 static unsigned long long boot_time;
 
@@ -67,7 +70,8 @@ static int timer_irq;
 
 static void timer_fn(void *arg)
 {
-	lkl_trigger_irq(timer_irq);
+	/* TODO: irq affinity? */
+	lkl_trigger_irq(0, timer_irq);
 }
 
 static int clockevent_set_state_shutdown(struct clock_event_device *evt)
@@ -104,12 +108,24 @@ static int clockevent_next_event(unsigned long ns,
 	return lkl_ops->timer_set_oneshot(timer, ns);
 }
 
+static void clockevent_broadcast(const struct cpumask *mask)
+{
+#ifdef CONFIG_SMP
+	int cpu;
+
+	for_each_cpu(cpu, mask) {
+		lkl_tick_broadcast(cpu);
+	}
+#endif
+}
+
 static struct clock_event_device clockevent = {
 	.name			= "lkl",
 	.features		= CLOCK_EVT_FEAT_ONESHOT,
 	.set_state_oneshot	= clockevent_set_state_oneshot,
 	.set_next_event		= clockevent_next_event,
 	.set_state_shutdown	= clockevent_set_state_shutdown,
+	.broadcast		= clockevent_broadcast,
 };
 
 static struct irqaction irq0  = {
@@ -119,8 +135,27 @@ static struct irqaction irq0  = {
 	.name = "timer"
 };
 
+#define CLOCKEVENT_NAMELEN	64
+static char clockevent_names[NR_CPUS][CLOCKEVENT_NAMELEN];
+static struct clock_event_device clockevent_loc[NR_CPUS];
+
+void lkl_cpu_clock_init(int cpu)
+{
+	struct clock_event_device *ce = &clockevent_loc[cpu];
+
+	memcpy(ce, &clockevent, sizeof(struct clock_event_device));
+	snprintf(&clockevent_names[cpu][0], CLOCKEVENT_NAMELEN, "lkl-%d", cpu);
+	ce->name = (const char*)&clockevent_names[cpu][0];
+	ce->features |= CLOCK_EVT_FEAT_C3STOP|CLOCK_EVT_FEAT_DUMMY;
+
+	ce->cpumask = cpumask_of(cpu);
+	tick_broadcast_control(TICK_BROADCAST_ON);
+	clockevents_config_and_register(ce, NSEC_PER_SEC, 1, ULONG_MAX);
+}
+
 void __init time_init(void)
 {
+	struct cpumask zero;
 	int ret;
 
 	if (!lkl_ops->timer_alloc || !lkl_ops->timer_free ||
@@ -136,6 +171,8 @@ void __init time_init(void)
 	if (ret)
 		pr_err("lkl: unable to register clocksource\n");
 
+	cpumask_clear(&zero);
+	clockevent.cpumask = &zero;
 	clockevents_config_and_register(&clockevent, NSEC_PER_SEC, 1, ULONG_MAX);
 
 	boot_time = lkl_ops->time();
