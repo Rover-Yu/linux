@@ -460,6 +460,14 @@ struct lkl_netdev *lkl_netdev_macvtap_create(const char *path, int offload);
  */
 struct lkl_netdev *lkl_netdev_pipe_create(char *ifname, int offload);
 
+/**
+ * lkl_netdev_netmap_create - create netmap net_device for the virtio net
+ *                         backend
+ *
+ * @ifname - interface name for the snoop device.
+ */
+struct lkl_netdev *lkl_netdev_netmap_create(const char *ifname);
+
 /*
  * lkl_register_dbg_handler- register a signal handler that loads a debug lib.
  *

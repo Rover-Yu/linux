@@ -42,6 +42,8 @@ struct virtio_dev_ops {
 	 * queued for processing
 	 */
 	int (*enqueue)(struct virtio_dev *dev, int q, struct virtio_req *req);
+	int (*flush)(struct virtio_dev *dev, int q);
+
 	/*
 	 * Acquire/release a lock on the specified queue. Only implemented by
 	 * netdevs, all other devices have NULL acquire/release function

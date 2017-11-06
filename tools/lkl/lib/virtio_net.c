@@ -132,9 +132,35 @@ static int net_enqueue(struct virtio_dev *dev, int q, struct virtio_req *req)
 	return 0;
 }
 
+static int net_flush(struct virtio_dev *dev, int q)
+{
+	struct virtio_net_dev *net_dev;
+	int ret = 0;
+
+	net_dev = netdev_of(dev);
+	/* Pick which virtqueue to send the buffer(s) to */
+	if (q == TX_QUEUE_IDX) {
+		if (net_dev->nd->ops->tx_end)
+			ret = net_dev->nd->ops->tx_end(net_dev->nd);
+		if (ret < 0)
+			return -1;
+	} else if (q == RX_QUEUE_IDX) {
+		if (net_dev->nd->ops->rx_end)
+			ret = net_dev->nd->ops->rx_end(net_dev->nd);
+		if (ret < 0)
+			return -1;
+	} else {
+		bad_request("tried to push on non-existent queue");
+		return -1;
+	}
+	return 0;
+}
+
+
 static struct virtio_dev_ops net_ops = {
 	.check_features = net_check_features,
 	.enqueue = net_enqueue,
+	.flush = net_flush,
 	.acquire_queue = net_acquire_queue,
 	.release_queue = net_release_queue,
 };

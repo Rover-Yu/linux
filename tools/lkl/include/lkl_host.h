@@ -96,6 +96,7 @@ struct lkl_dev_net_ops {
 	 * @returns number of bytes transmitted
 	 */
 	int (*tx)(struct lkl_netdev *nd, struct iovec *iov, int cnt);
+	int (*tx_end)(struct lkl_netdev *nd);
 
 	/**
 	 * @rx: reads a packet from the net device.
@@ -112,6 +113,7 @@ struct lkl_dev_net_ops {
 	 * @returns number of bytes read for success or < 0 if error
 	 */
 	int (*rx)(struct lkl_netdev *nd, struct iovec *iov, int cnt);
+	int (*rx_end)(struct lkl_netdev *nd);
 
 #define LKL_DEV_NET_POLL_RX		1
 #define LKL_DEV_NET_POLL_TX		2

@@ -73,6 +73,14 @@ ifneq (,$(filter $(OUTPUT_FORMAT),elf64-x86-64 elf32-i386 elf64-x86-64-freebsd e
     CFLAGS     += -DCONFIG_AUTO_LKL_VIRTIO_NET_VDE
     LDLIBS     += $(shell pkg-config --libs vdeplug)
   endif
+  # Virtual Distributed Ethernet configuration
+  ifeq ($(netmap),yes)
+    NETMAP_SRCDIR ?= $(shell pwd)/netmap
+    export CONFIG_AUTO_LKL_VIRTIO_NET_NETMAP=y
+    CFLAGS     += -DCONFIG_AUTO_LKL_VIRTIO_NET_NETMAP
+    CFLAGS     += -I${NETMAP_SRCDIR}/sys
+  endif
+
 else ifneq (,$(filter $(OUTPUT_FORMAT),pe-i386 pe-x86-64 ))
   KOPT      = "KALLSYMS_EXTRA_PASS=1"
   LDLIBS   += -lws2_32

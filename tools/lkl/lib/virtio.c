@@ -279,6 +279,13 @@ static int virtio_process_one(struct virtio_dev *dev, int qidx)
 	return dev->ops->enqueue(dev, qidx, req);
 }
 
+static int virtio_process_end(struct virtio_dev *dev, int qidx)
+{
+	if (dev->ops->flush)
+		return dev->ops->flush(dev, qidx);
+	return 0;
+}
+
 /* NB: we can enter this function two different ways in the case of
  * netdevs --- either through a tx/rx thread poll (which the LKL
  * scheduler knows nothing about) or through virtio_write called
@@ -299,6 +306,7 @@ static int virtio_process_one(struct virtio_dev *dev, int qidx)
 void virtio_process_queue(struct virtio_dev *dev, uint32_t qidx)
 {
 	struct virtio_queue *q = &dev->queue[qidx];
+	int n=0;
 
 	if (!q->ready)
 		return;
@@ -316,10 +324,14 @@ void virtio_process_queue(struct virtio_dev *dev, uint32_t qidx)
 			break;
 		if (q->last_avail_idx == le16toh(q->avail->idx))
 			virtio_set_avail_event(q, q->avail->idx);
+		++n;
 	}
+	virtio_process_end(dev, qidx);
 
 	if (dev->ops->release_queue)
 		dev->ops->release_queue(dev, qidx);
+//	if (n>1)
+//		printf("%s-batch %d\n", qidx ? "Rx" : "Tx", n);
 }
 
 static inline uint32_t virtio_read_device_features(struct virtio_dev *dev)

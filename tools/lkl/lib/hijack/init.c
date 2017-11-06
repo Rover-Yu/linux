@@ -283,6 +283,8 @@ static int lkl_hijack_netdev_create(struct lkl_config *cfg, int ifidx)
 			nd[ifidx] = lkl_netdev_vde_create(cfg->ifparams[ifidx]);
 		if (strcmp(cfg->iftype[ifidx], "raw") == 0)
 			nd[ifidx] = lkl_netdev_raw_create(cfg->ifparams[ifidx]);
+		if (strcmp(cfg->iftype[ifidx], "netmap") == 0)
+			nd[ifidx] = lkl_netdev_netmap_create(cfg->ifparams[ifidx]);
 	}
 
 	if (nd[ifidx]) {
