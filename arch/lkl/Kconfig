@@ -37,6 +37,8 @@ config LKL
        select ARCH_NO_COHERENT_DMA_MMAP
        select ARCH_USE_QUEUED_RWLOCKS
        select ARCH_USE_QUEUED_SPINLOCKS
+       select GENERIC_BUG if BUG
+       select GENERIC_CLOCKEVENTS_BROADCAST
 
 config OUTPUTFORMAT
        string
@@ -70,12 +72,21 @@ config RWSEM_GENERIC_SPINLOCK
 
 config SMP
        def_bool y
+       select GENERIC_SMP_IDLE_THREAD
+
+config KALLSYMS_ALL
+       # incompatible so far, we need more linker script magics in future
+       def_bool n
 
 config NR_CPUS
 	int "Maximum number of CPUs" if SMP
 	default "2" if SMP
 
 config LKL_X86_64
+	bool
+	default y if 64BIT
+
+config BUG
 	bool
 	default y
 
