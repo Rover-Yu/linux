@@ -20,37 +20,42 @@
  * which irqs were triggered we first search the index and then the
  * corresponding part of the arrary.
  */
-static unsigned long irq_status[NR_IRQS/IRQ_STATUS_BITS];
-static unsigned long irq_index_status;
+static unsigned long irq_status[NR_CPUS][NR_IRQS/IRQ_STATUS_BITS];
+static unsigned long irq_index_status[NR_CPUS];
 
 static inline unsigned long test_and_clear_irq_index_status(void)
 {
-	if (!irq_index_status)
+	int cpu = smp_processor_id();
+
+	if (!irq_index_status[cpu])
 		return 0;
-	return __sync_fetch_and_and(&irq_index_status, 0);
+	return __sync_fetch_and_and(&irq_index_status[cpu], 0);
 }
 
 static inline unsigned long test_and_clear_irq_status(int index)
 {
-	if (!&irq_status[index])
+	int cpu = smp_processor_id();
+
+	if (!irq_status[cpu][index])
 		return 0;
-	return __sync_fetch_and_and(&irq_status[index], 0);
+	return __sync_fetch_and_and(&irq_status[cpu][index], 0);
 }
 
 void set_irq_pending(int irq)
 {
+	int cpu = smp_processor_id();
 	int index = irq / IRQ_STATUS_BITS;
 	int bit = irq % IRQ_STATUS_BITS;
 
-	__sync_fetch_and_or(&irq_status[index], BIT(bit));
-	__sync_fetch_and_or(&irq_index_status, BIT(index));
+	__sync_fetch_and_or(&irq_status[cpu][index], BIT(bit));
+	__sync_fetch_and_or(&irq_index_status[cpu], BIT(index));
 }
 
 static struct irq_info {
 	const char *user;
 } irqs[NR_IRQS];
 
-static bool irqs_enabled;
+static bool irqs_enabled[NR_CPUS];
 
 static struct pt_regs dummy;
 
@@ -63,7 +68,11 @@ static void run_irq(int irq)
 	local_irq_save(flags);
 	irq_enter();
 	generic_handle_irq(irq);
+	if (LKL_IRQ_IPI == irq)
+		lkl_ipi();
 	irq_exit();
+	if (LKL_IRQ_IPI == irq)
+		lkl_scheduler_ipi();
 	set_irq_regs(old_regs);
 	local_irq_restore(flags);
 }
@@ -73,13 +82,17 @@ static void run_irq(int irq)
  * issue any Linux calls (e.g. prink) if lkl_cpu_get() was not issued
  * before.
  */
-int lkl_trigger_irq(int irq)
+int lkl_trigger_irq(int cpu, int irq)
 {
 	int ret;
 
 	if (!irq || irq > NR_IRQS)
 		return -EINVAL;
 
+	/* some apps can't use kernel API to gather its current processor, so
+	   I use negative value to represent current processor now. */
+	if (cpu >= 0)
+		lkl_set_current_cpu(cpu);
 	ret = lkl_cpu_try_run_irq(irq);
 	if (ret <= 0)
 		return ret;
@@ -89,7 +102,7 @@ int lkl_trigger_irq(int irq)
 	 * IRQ -> softirq -> lkl_trigger_irq) make sure we are actually allowed
 	 * to run irqs at this point
 	 */
-	if (!irqs_enabled) {
+	if (!irqs_enabled[raw_smp_processor_id()]) {
 		set_irq_pending(irq);
 		lkl_cpu_put();
 		return 0;
@@ -164,15 +177,16 @@ void lkl_put_irq(int i, const char *user)
 
 unsigned long arch_local_save_flags(void)
 {
-	return irqs_enabled;
+	return irqs_enabled[raw_smp_processor_id()];
 }
 
 void arch_local_irq_restore(unsigned long flags)
 {
-	if (flags == ARCH_IRQ_ENABLED && irqs_enabled == ARCH_IRQ_DISABLED &&
-	    !in_interrupt())
+	if (flags == ARCH_IRQ_ENABLED && irqs_enabled[raw_smp_processor_id()] == ARCH_IRQ_DISABLED &&
+	    !in_interrupt()) {
 		run_irqs();
-	irqs_enabled = flags;
+	}
+	irqs_enabled[raw_smp_processor_id()] = flags;
 }
 
 void init_IRQ(void)

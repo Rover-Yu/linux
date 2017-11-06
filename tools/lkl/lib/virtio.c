@@ -81,7 +81,7 @@ static inline void virtio_deliver_irq(struct virtio_dev *dev)
 	dev->int_status |= VIRTIO_MMIO_INT_VRING;
 	/* Make sure all memory writes before are visible to the driver. */
 	__sync_synchronize();
-	lkl_trigger_irq(dev->irq);
+	lkl_trigger_irq(-1, dev->irq);
 }
 
 static inline uint16_t virtio_get_used_idx(struct virtio_queue *q)

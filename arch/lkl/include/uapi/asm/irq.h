@@ -7,9 +7,10 @@
  * This function is used by the device host side to signal its Linux counterpart
  * that some event happened.
  *
+ * @cpu - the cpu number to signal
  * @irq - the irq number to signal
  */
-int lkl_trigger_irq(int irq);
+int lkl_trigger_irq(int cpu, int irq);
 
 /**
  * lkl_get_free_irq - find and reserve a free IRQ number
