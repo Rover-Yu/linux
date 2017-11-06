@@ -2827,9 +2827,11 @@ static void rcu_do_batch(struct rcu_state *rsp, struct rcu_data *rdp)
  */
 void rcu_check_callbacks(int user)
 {
+	extern struct task_struct *idle_host_tasks[];
+
 	trace_rcu_utilization(TPS("Start scheduler-tick"));
 	increment_cpu_stall_ticks();
-	if (user || rcu_is_cpu_rrupt_from_idle()) {
+	if (user || rcu_is_cpu_rrupt_from_idle() || (current == idle_host_tasks[smp_processor_id()])) {
 
 		/*
 		 * Get here if this CPU took its interrupt from user
