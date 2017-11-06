@@ -1,6 +1,8 @@
 #ifndef _ASM_LKL_PROCESSOR_H
 #define _ASM_LKL_PROCESSOR_H
 
+#include <linux/irqflags.h>
+
 struct task_struct;
 
 static inline void cpu_relax(void)

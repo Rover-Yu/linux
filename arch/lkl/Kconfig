@@ -75,6 +75,10 @@ config NR_CPUS
 	int "Maximum number of CPUs" if SMP
 	default "2" if SMP
 
+config LKL_X86_64
+	bool
+	default y
+
 source init/Kconfig
 
 source net/Kconfig

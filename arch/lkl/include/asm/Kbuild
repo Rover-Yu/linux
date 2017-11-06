@@ -1,6 +1,4 @@
 generic-y += atomic.h
-generic-y += barrier.h
-generic-y += bitops.h
 generic-y += bug.h
 generic-y += bugs.h
 generic-y += cache.h
