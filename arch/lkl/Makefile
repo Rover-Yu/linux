@@ -29,7 +29,7 @@ LKL_ENTRY_POINTS := lkl_start_kernel lkl_sys_halt lkl_syscall lkl_trigger_irq \
 core-y += arch/lkl/kernel/
 core-y += arch/lkl/mm/
 
-all: lkl.o
+all: lkl.o arch/lkl/kernel/lkl.lds
 
 lkl.o: vmlinux
 	$(OBJCOPY) -R .eh_frame -R .syscall_defs $(foreach sym,$(LKL_ENTRY_POINTS),-G$(prefix)$(sym)) vmlinux lkl.o

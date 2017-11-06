@@ -19,4 +19,4 @@ if [ -n ${LKL_HIJACK_DEBUG+x}  ]
 then
   trap '' TSTP
 fi
-LD_PRELOAD=liblkl-hijack.so $*
+LD_PRELOAD=libvmlinux.so:liblkl-hijack.so $*
