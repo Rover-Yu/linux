@@ -246,6 +246,9 @@ int syscalls_init(void)
 			return -1;
 	}
 
+	set_cpus_allowed_ptr(current, cpumask_of(0));
+	schedule();
+
 	pid = kernel_thread(idle_host_task_loop, NULL, CLONE_FLAGS);
 	if (pid < 0) {
 		if (lkl_ops->tls_free)
