@@ -181,8 +181,13 @@ static unsigned long kallsyms_sym_address(int idx)
 		return kallsyms_addresses[idx];
 
 	/* values are unsigned offsets if --absolute-percpu is not in effect */
-	if (!IS_ENABLED(CONFIG_KALLSYMS_ABSOLUTE_PERCPU))
+	if (!IS_ENABLED(CONFIG_KALLSYMS_ABSOLUTE_PERCPU)) {
+#ifndef CONFIG_LKL
 		return kallsyms_relative_base + (u32)kallsyms_offsets[idx];
+#else
+		return (unsigned long)&__init_begin + (u32)kallsyms_offsets[idx];
+#endif
+	}
 
 	/* ...otherwise, positive offsets are absolute values */
 	if (kallsyms_offsets[idx] >= 0)
