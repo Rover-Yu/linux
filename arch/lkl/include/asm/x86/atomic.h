@@ -5,7 +5,7 @@
 #include <linux/types.h>
 #include <asm/alternative.h>
 #include <asm/cmpxchg.h>
-#include <asm/rmwcc.h>
+#include <asm/x86/rmwcc.h>
 #include <asm/barrier.h>
 
 /*
@@ -262,6 +262,6 @@ static __always_inline short int atomic_inc_short(short int *v)
 	return *v;
 }
 
-#include <asm/atomic64_64.h>
+#include <asm/x86/atomic64_64.h>
 
 #endif /* _ASM_X86_ATOMIC_H */
