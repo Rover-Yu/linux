@@ -24,6 +24,7 @@
 
 #include <linux/smp.h>
 #include <linux/bug.h>
+#include <linux/prefetch.h>
 #include <linux/cpumask.h>
 #include <linux/percpu.h>
 #include <linux/hardirq.h>
