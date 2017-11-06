@@ -522,7 +522,7 @@ static void lkl_ipi_thread(void *arg)
 			cpus[cpu].owner = ti->tid;
 
 			local_irq_disable();
-			rcu_note_context_switch();
+			rcu_note_context_switch(false);
 			local_irq_enable();
 			__cpu_try_get_unlock(cpu, ret, 1);
 
