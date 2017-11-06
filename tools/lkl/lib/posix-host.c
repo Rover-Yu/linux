@@ -311,6 +311,21 @@ static long _gettid(void)
 #endif
 }
 
+static long posix_sysconf(int lkl_name)
+{
+	int ret, max_lkl_name;
+	int sc_table[] = {
+		[0] = _SC_NPROCESSORS_CONF,
+	};
+
+	max_lkl_name = sizeof(sc_table)/sizeof(sc_table[0]);
+	if (lkl_name >= max_lkl_name)
+		return -EINVAL;
+
+	ret = sysconf(sc_table[lkl_name]);
+	return ret < 0 ? -errno : ret;
+}
+
 struct lkl_host_operations lkl_host_ops = {
 	.panic = panic,
 	.thread_create = thread_create,
@@ -344,6 +359,7 @@ struct lkl_host_operations lkl_host_ops = {
 	.gettid = _gettid,
 	.jmp_buf_set = jmp_buf_set,
 	.jmp_buf_longjmp = jmp_buf_longjmp,
+	.sysconf = posix_sysconf,
 };
 
 static int fd_get_capacity(struct lkl_disk disk, unsigned long long *res)
