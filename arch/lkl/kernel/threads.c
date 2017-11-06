@@ -5,6 +5,7 @@
 #include <asm/host_ops.h>
 #include <asm/cpu.h>
 #include <asm/sched.h>
+#include <asm/syscalls.h>
 
 static int init_ti(struct thread_info *ti)
 {
@@ -70,7 +71,14 @@ void free_thread_stack(struct task_struct *tsk)
 	kfree(ti);
 }
 
-struct thread_info *_current_thread_info = &init_thread_union.thread_info;
+struct thread_info *_current_thread_info[CONFIG_NR_CPUS] = {
+	&init_thread_union.thread_info,	/* for CPU0 */
+};
+
+void lkl_set_current(int cpu, struct task_struct *task)
+{
+	_current_thread_info[cpu] = task_thread_info(task);
+}
 
 /*
  * schedule() expects the return of this function to be the task that we
@@ -82,22 +90,25 @@ struct thread_info *_current_thread_info = &init_thread_union.thread_info;
  * init -> ksoftirqd0: saved prev on init stack is init
  * ksoftirqd0 -> swapper: returned prev is swapper
  */
-static struct task_struct *abs_prev = &init_task;
+static struct task_struct *abs_prev[NR_CPUS] = {
+	&init_task,			/* for CPU0 */
+};
 
 struct task_struct *__switch_to(struct task_struct *prev,
 				struct task_struct *next)
 {
+	int cpu = smp_processor_id();
 	struct thread_info *_prev = task_thread_info(prev);
 	struct thread_info *_next = task_thread_info(next);
 	unsigned long _prev_flags = _prev->flags;
 	struct lkl_jmp_buf _prev_jb;
 
-	_current_thread_info = task_thread_info(next);
+	_current_thread_info[cpu] = task_thread_info(next);
 	_next->prev_sched = prev;
-	abs_prev = prev;
+	abs_prev[cpu] = prev;
 
 	BUG_ON(!_next->tid);
-	lkl_cpu_change_owner(_next->tid);
+	lkl_cpu_change_owner(cpu, _next->tid);
 
 	if (test_bit(TIF_SCHED_JB, &_prev_flags)) {
 		/* Atomic. Must be done before wakeup next */
@@ -110,12 +121,14 @@ struct task_struct *__switch_to(struct task_struct *prev,
 		lkl_ops->jmp_buf_longjmp(&_prev_jb, 1);
 	} else {
 		lkl_ops->sem_down(_prev->sched_sem);
+		lkl_set_current_cpu(task_cpu(prev));	/* task may migrate into new cpu */
+		cpu = smp_processor_id();
 	}
 
 	if (_prev->dead)
 		lkl_ops->thread_exit();
 
-	return abs_prev;
+	return abs_prev[cpu];
 }
 
 int host_task_stub(void *unused)
@@ -136,7 +149,8 @@ void switch_to_host_task(struct task_struct *task)
 	wake_up_process(task);
 	thread_sched_jb();
 	lkl_ops->sem_down(task_thread_info(task)->sched_sem);
-	schedule_tail(abs_prev);
+	lkl_cpu_change_owner(raw_smp_processor_id(), task_thread_info(task)->tid);
+	schedule_tail(abs_prev[raw_smp_processor_id()]);
 }
 
 struct thread_bootstrap_arg {
@@ -154,6 +168,8 @@ static void thread_bootstrap(void *_tba)
 
 	lkl_ops->sem_down(ti->sched_sem);
 	kfree(tba);
+	/* schedule_tail() will use some per-cpu stuffs */
+	lkl_set_current_cpu(task_cpu(ti->task));
 	if (ti->prev_sched)
 		schedule_tail(ti->prev_sched);
 
@@ -179,6 +195,13 @@ int copy_thread(unsigned long clone_flags, unsigned long esp,
 	tba->f = (int (*)(void *))esp;
 	tba->arg = (void *)unused;
 	tba->ti = ti;
+
+	/* ugly, but it seem that arch/lkl hasn't other ways to insert them */
+	if (!tba->f) {
+		tba->f = lkl_start_secondary;
+	} else if (tba->f == idle_host_task_loop) {
+		set_cpus_allowed_ptr(p, cpumask_of(0));
+	}
 
 	ti->tid = lkl_ops->thread_create(thread_bootstrap, tba);
 	if (!ti->tid) {

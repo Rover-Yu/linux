@@ -6,6 +6,7 @@
 #ifndef __ASSEMBLY__
 #include <asm/types.h>
 #include <asm/processor.h>
+#include <asm/smp.h>
 #include <asm/host_ops.h>
 
 typedef struct {
@@ -40,11 +41,14 @@ struct thread_info {
 #define init_stack		(init_thread_union.stack)
 
 /* how to get the thread information struct from C */
-extern struct thread_info *_current_thread_info;
+extern struct thread_info *_current_thread_info[CONFIG_NR_CPUS];
+
 static inline struct thread_info *current_thread_info(void)
 {
-	return _current_thread_info;
+	return _current_thread_info[raw_smp_processor_id()];
 }
+
+void lkl_set_current(int cpu, struct task_struct *task);
 
 /* thread information allocation */
 unsigned long *alloc_thread_stack_node(struct task_struct *, int node);
