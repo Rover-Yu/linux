@@ -1,6 +1,6 @@
 config LKL
        def_bool y
-       depends on !SMP && !MMU && !COREDUMP && !SECCOMP && !UPROBES && !COMPAT && !USER_RETURN_NOTIFIER
+       depends on !MMU && !COREDUMP && !SECCOMP && !UPROBES && !COMPAT && !USER_RETURN_NOTIFIER
        select ARCH_THREAD_STACK_ALLOCATOR
        select RWSEM_GENERIC_SPINLOCK
        select GENERIC_ATOMIC64
@@ -16,7 +16,7 @@ config LKL
        select DMA_NOOP_OPS
        select PHYS_ADDR_T_64BIT if 64BIT
        select 64BIT if OUTPUT_FORMAT = "elf64-x86-64"
-	   select 64BIT if OUTPUT_FORMAT = "pe-x86-64"
+       select 64BIT if OUTPUT_FORMAT = "pe-x86-64"
        select HAVE_UNDERSCORE_SYMBOL_PREFIX if OUTPUT_FORMAT = "pe-i386"
        select 64BIT if OUTPUT_FORMAT = "elf64-x86-64-freebsd"
        select 64BIT if OUTPUT_FORMAT = "elf64-littleaarch64"
@@ -35,6 +35,8 @@ config LKL
        select IP_ADVANCED_ROUTER
        select IPV6_ADVANCED_ROUTER
        select ARCH_NO_COHERENT_DMA_MMAP
+       select ARCH_USE_QUEUED_RWLOCKS
+       select ARCH_USE_QUEUED_SPINLOCKS
 
 config OUTPUTFORMAT
        string
@@ -65,6 +67,13 @@ config NO_IOPORT_MAP
 config RWSEM_GENERIC_SPINLOCK
 	bool
 	default y
+
+config SMP
+       def_bool y
+
+config NR_CPUS
+	int "Maximum number of CPUs" if SMP
+	default "2" if SMP
 
 source init/Kconfig
 

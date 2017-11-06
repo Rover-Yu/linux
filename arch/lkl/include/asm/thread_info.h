@@ -23,6 +23,9 @@ struct thread_info {
 	lkl_thread_t tid;
 	struct task_struct *prev_sched;
 	unsigned long stackend;
+#ifdef CONFIG_SMP
+	int cpu;
+#endif
 };
 
 #define INIT_THREAD_INFO(tsk)				\
