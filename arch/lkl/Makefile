@@ -28,6 +28,7 @@ LKL_ENTRY_POINTS := lkl_start_kernel lkl_sys_halt lkl_syscall lkl_trigger_irq \
 
 core-y += arch/lkl/kernel/
 core-y += arch/lkl/mm/
+core-y += arch/lkl/arm/
 
 all: lkl.o arch/lkl/kernel/lkl.lds
 

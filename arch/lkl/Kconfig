@@ -85,6 +85,10 @@ config LKL_X86_64
 	bool
 	default y if 64BIT
 
+config LKL_ARM_64
+	bool
+	default n if 64BIT
+
 config BUG
 	bool
 	default y
