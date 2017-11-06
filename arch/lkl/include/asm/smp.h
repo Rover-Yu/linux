@@ -8,17 +8,25 @@ struct task_struct;
 struct cpumask;
 
 static inline void smp_prepare_boot_cpu(void) { }
-static inline void smp_prepare_cpus(unsigned int max_cpus) { }
+extern void smp_prepare_cpus(unsigned int max_cpus);
 
-static inline int __cpu_up(unsigned int cpu, struct task_struct *idle) { return 0; }
+extern int __cpu_up(unsigned int cpu, struct task_struct *idle);
 static inline void smp_send_stop(void) { }
-static inline void smp_send_reschedule(int cpu) { }
 static inline void smp_cpus_done(unsigned int max_cpus) { }
 
-static inline void arch_send_call_function_single_ipi(int cpu) { }
-static inline void arch_send_call_function_ipi_mask(const struct cpumask *mask) { }
+extern void smp_send_reschedule(int cpu);
+extern void arch_send_call_function_single_ipi(int cpu);
+extern void arch_send_call_function_ipi_mask(const struct cpumask *mask);
 
-#define raw_smp_processor_id()		0		//FIXME
+extern void lkl_smp_enter_secondary_idle(void);
+
+/* FIXME: this may break Windows/PE build ? */
+extern int __thread lkl_tls_cpu;
+#define raw_smp_processor_id()	(lkl_tls_cpu)
+
+#else
+
+#define raw_smp_processor_id()	0
 
 #endif
 

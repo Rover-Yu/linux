@@ -9,6 +9,7 @@
 #include <linux/task_work.h>
 #include <linux/syscalls.h>
 #include <linux/kthread.h>
+#include <linux/irqflags.h>
 #include <linux/platform_device.h>
 #include <asm/host_ops.h>
 #include <asm/syscalls.h>
@@ -101,6 +102,7 @@ long lkl_syscall(long no, long *params)
 	struct task_struct *task = host0;
 	long ret;
 
+	lkl_set_current_cpu(task_cpu(task));
 	ret = lkl_cpu_get();
 	if (ret < 0)
 		return ret;
@@ -112,6 +114,13 @@ long lkl_syscall(long no, long *params)
 			if (ret)
 				goto out;
 			lkl_ops->tls_set(task_key, task);
+		}
+		if (task_cpu(task) != smp_processor_id()) {
+			lkl_cpu_put();
+			lkl_set_current_cpu(task_cpu(task));
+			ret = lkl_cpu_get();
+			if (ret < 0)
+				return ret;
 		}
 	}
 
@@ -130,37 +139,104 @@ out:
 	return ret;
 }
 
-static struct task_struct *idle_host_task;
+struct task_struct *idle_host_tasks[NR_CPUS];
 
 /* called from idle, don't failed, don't block */
 void wakeup_idle_host_task(void)
 {
-	if (!need_resched() && idle_host_task)
-		wake_up_process(idle_host_task);
+	int cpu = smp_processor_id();
+
+	if (!need_resched() && idle_host_tasks[cpu]) {
+		wake_up_process(idle_host_tasks[cpu]);
+	}
 }
 
-static int idle_host_task_loop(void *unused)
+static int secondary_idle_host_task_loop(void *voidp)
 {
+	struct secondary_idle_entry *arg = voidp;
+	int cpu = arg->cpu;
+	int local_cpu;
 	struct thread_info *ti = task_thread_info(current);
 
-	snprintf(current->comm, sizeof(current->comm), "idle_host_task");
-	set_thread_flag(TIF_HOST_THREAD);
-	idle_host_task = current;
+	while (1) {
+		local_cpu = raw_smp_processor_id();
+		if (local_cpu == cpu) {
+			break;
+		}
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		kthread_bind(current, cpu);
+		schedule_timeout(10);	/* TODO: any better fix ? */
+		if (idle_host_tasks[cpu] == NULL)
+			return 0;
+	}
 
+	snprintf(current->comm, TASK_COMM_LEN, "idle_host_task%d", arg->cpu);
+	set_ti_thread_flag(task_thread_info(current), TIF_HOST_THREAD);
+//	rcu_idle_enter();
 	for (;;) {
 		lkl_cpu_put();
+
 		lkl_ops->sem_down(ti->sched_sem);
-		if (idle_host_task == NULL) {
+
+		if (idle_host_tasks[cpu] == NULL) {
 			lkl_ops->thread_exit();
 			return 0;
 		}
-		schedule_tail(ti->prev_sched);
+
+		if (irqs_disabled())	/*  IPI may wakeup this under enabled IRQ */
+			schedule_tail(ti->prev_sched);
+	}
+}
+
+int smp_idle_host_init(struct secondary_idle_entry *arg)
+{
+	struct task_struct *tsk;
+	pid_t pid;
+
+	/* We are at the Middle Age, the kthread_create*API is not safe for us */
+	pid = kernel_thread(secondary_idle_host_task_loop,
+					(void*)arg, CLONE_FLAGS);
+	if (pid < 0)
+		return pid;
+
+	rcu_read_lock();
+	tsk = find_task_by_pid_ns(pid, &init_pid_ns);
+	rcu_read_unlock();
+	idle_host_tasks[arg->cpu] = tsk;
+
+	return 0;
+}
+
+int idle_host_task_loop(void *unused)
+{
+	struct thread_info *ti = task_thread_info(current);
+
+	snprintf(current->comm, sizeof(current->comm), "idle_host_task0");
+	set_thread_flag(TIF_HOST_THREAD);
+	lkl_cpu_clock_init(0);
+
+	for (;;) {
+//		rcu_idle_enter();
+		lkl_cpu_put();
+		lkl_ops->sem_down(ti->sched_sem);
+
+		if (idle_host_tasks[0] == NULL) {
+			lkl_ops->thread_exit();
+			return 0;
+		}
+
+		if (irqs_disabled())	/*  IPI may wakeup this under enabled IRQ */
+			schedule_tail(ti->prev_sched);
+//		rcu_idle_exit();
 	}
 }
 
 int syscalls_init(void)
 {
-	snprintf(current->comm, sizeof(current->comm), "host0");
+	pid_t pid;
+	struct task_struct *task;
+
+	snprintf(current->comm, sizeof(current->comm), "syscalls_init()");
 	set_thread_flag(TIF_HOST_THREAD);
 	host0 = current;
 
@@ -170,23 +246,34 @@ int syscalls_init(void)
 			return -1;
 	}
 
-	if (kernel_thread(idle_host_task_loop, NULL, CLONE_FLAGS) < 0) {
+	pid = kernel_thread(idle_host_task_loop, NULL, CLONE_FLAGS);
+	if (pid < 0) {
 		if (lkl_ops->tls_free)
 			lkl_ops->tls_free(task_key);
 		return -1;
 	}
+	rcu_read_lock();
+	task = find_task_by_pid_ns(pid, &init_pid_ns);
+	rcu_read_unlock();
+	idle_host_tasks[0] = task;
+
+	snprintf(current->comm, sizeof(current->comm), "host0");
 
 	return 0;
 }
 
 void syscalls_cleanup(void)
 {
-	if (idle_host_task) {
-		struct thread_info *ti = task_thread_info(idle_host_task);
+	int cpu;
 
-		idle_host_task = NULL;
-		lkl_ops->sem_up(ti->sched_sem);
-		lkl_ops->thread_join(ti->tid);
+	for (cpu=0; cpu<NR_CPUS; cpu++) {
+		if (idle_host_tasks[cpu]) {
+			struct thread_info *ti = task_thread_info(idle_host_tasks[cpu]);
+
+			idle_host_tasks[cpu] = NULL;
+			lkl_ops->sem_up(ti->sched_sem);
+			lkl_ops->thread_join(ti->tid);
+		}
 	}
 
 	if (lkl_ops->tls_free)

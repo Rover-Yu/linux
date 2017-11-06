@@ -15,7 +15,7 @@
 
 struct lkl_host_operations *lkl_ops;
 static char cmd_line[COMMAND_LINE_SIZE];
-static void *init_sem;
+static struct lkl_sem *init_sem;
 static int is_running;
 void (*pm_power_off)(void) = NULL;
 static unsigned long mem_size = 64 * 1024 * 1024;
@@ -38,6 +38,8 @@ void __init setup_arch(char **cl)
 	*cl = cmd_line;
 	panic_blink = lkl_panic_blink;
 	parse_early_param();
+	if (lkl_smp_init())
+		panic("lkl_smp_init() failed");
 	bootmem_init(mem_size);
 }
 
@@ -83,7 +85,7 @@ int __init lkl_start_kernel(struct lkl_host_operations *ops,
 	lkl_ops->sem_down(init_sem);
 	lkl_ops->sem_free(init_sem);
 	current_thread_info()->tid = lkl_ops->thread_self();
-	lkl_cpu_change_owner(current_thread_info()->tid);
+	lkl_cpu_change_owner(raw_smp_processor_id(), current_thread_info()->tid);
 
 	lkl_cpu_put();
 	is_running = 1;
